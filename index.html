@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12161a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="動画カット">
+<title>動画カット</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<main class="screen">
+  <h1>動画カット</h1>
+  <p class="msg">動画は、このスマホ(パソコン)の中だけで処理します。外には送りません。</p>
+
+  <label class="drop" id="drop">
+    <input type="file" id="fileV" accept="video/*,.mp4,.mov,.m4v,.webm" hidden>
+    <strong>ここに動画を入れる</strong>
+    <span>押して選ぶか、ここに動画をドラッグします</span>
+  </label>
+
+  <section id="editor" hidden>
+    <video id="vid" playsinline controls muted></video>
+
+    <div class="times">
+      <div><span class="lbl">開始</span><b id="tS">0:00.0</b></div>
+      <div><span class="lbl">終了</span><b id="tE">0:00.0</b></div>
+      <div><span class="lbl">長さ</span><b id="tL">0:00.0</b></div>
+    </div>
+
+    <div class="range" id="range">
+      <div class="bar-bg"></div>
+      <div class="bar-sel" id="sel"></div>
+      <input type="range" id="rS" min="0" max="1000" value="0" step="1" aria-label="開始位置">
+      <input type="range" id="rE" min="0" max="1000" value="1000" step="1" aria-label="終了位置">
+    </div>
+
+    <div class="row">
+      <button type="button" class="small" id="setS">いまの所を、開始にする</button>
+      <button type="button" class="small" id="setE">いまの所を、終了にする</button>
+    </div>
+    <div class="row">
+      <button type="button" class="small" id="back1">◀ 1秒</button>
+      <button type="button" class="small" id="fwd1">1秒 ▶</button>
+      <button type="button" class="small" id="playSel">切り取る範囲を、見る</button>
+    </div>
+
+    <details id="musicBox">
+      <summary>音楽を入れる(なくてもOK)</summary>
+      <label class="drop small-drop">
+        <input type="file" id="fileA" accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg" hidden>
+        <span id="aName">音楽ファイルを選ぶ</span>
+      </label>
+      <div class="row">
+        <label class="sel">音の扱い
+          <select id="aMode">
+            <option value="replace">動画の音を消して、音楽に入れ替える</option>
+            <option value="mix">動画の音と、音楽を、まぜる</option>
+          </select>
+        </label>
+        <button type="button" class="small" id="aClear" hidden>音楽をやめる</button>
+      </div>
+      <p class="msg">音楽は、切り取った動画の長さに合わせて、頭から流れます。長いと、途中で切れます。</p>
+    </details>
+
+    <details>
+      <summary>切り方の設定</summary>
+      <label class="sel">切り方
+        <select id="mode">
+          <option value="fast">はやい(切れ目が、少しズレることがあります)</option>
+          <option value="exact">きっちり(時間がかかります)</option>
+        </select>
+      </label>
+      <p class="msg">「はやい」は、画質が落ちません。音楽を入れるときも、映像は、そのままです。</p>
+    </details>
+
+    <button type="button" class="primary" id="go">切り取って、つくる</button>
+    <progress id="prog" max="100" value="0" hidden></progress>
+    <p class="msg" id="msg" role="status"></p>
+
+    <section id="done" hidden>
+      <video id="outV" playsinline controls></video>
+      <div class="row">
+        <a class="btn primary" id="dl" download="cut.mp4">保存する</a>
+        <button type="button" id="share" hidden>共有(写真に保存など)</button>
+      </div>
+      <p class="msg" id="outInfo"></p>
+    </section>
+  </section>
+
+  <p class="msg" id="err" role="alert"></p>
+  <p class="msg" id="ver">版 1</p>
+</main>
+<script src="vendor/ffmpeg.js"></script>
+<script src="vendor/ffmpeg-util.js"></script>
+<script src="app.js?v=1"></script>
+</body>
+</html>
