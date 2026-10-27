@@ -1,5 +1,5 @@
 // 一度開いたあとは、電波がなくても開けるようにする(自分のファイルだけを保存)
-const CACHE = 'douga-v1';
+const CACHE = 'douga-v2';
 const FILES = ['./', 'index.html', 'app.js', 'style.css', 'manifest.webmanifest', 'icon-180.png', 'icon-512.png',
   'vendor/ffmpeg.js', 'vendor/814.ffmpeg.js', 'vendor/ffmpeg-util.js', 'vendor/ffmpeg-core.js'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())); });

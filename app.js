@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const VER = 1;
+  const VER = 2;
   const $ = (id) => document.getElementById(id);
   const vid = $('vid');
   let file = null, audio = null, url = null, dur = 0, S = 0, E = 0, ff = null, busy = false, outUrl = null;
@@ -16,7 +16,8 @@
     file = f;
     if (url) URL.revokeObjectURL(url);
     url = URL.createObjectURL(f);
-    vid.src = url; vid.muted = true;
+    vid.src = url; vid.muted = false; vid.volume = 1;
+    drawWave(f);
     vid.onloadedmetadata = () => {
       dur = vid.duration || 0;
       if (!isFinite(dur) || dur <= 0) { showErr('この動画は、読み込めませんでした。'); return; }
@@ -39,6 +40,28 @@
   // ページのどこに落としても、ブラウザが動画を開かないようにする
   window.addEventListener('dragover', (e) => e.preventDefault());
   window.addEventListener('drop', (e) => e.preventDefault());
+
+  // ---- 音の波形(音が聞こえなくても、切る場所が分かるように) ----
+  let waveTok = 0;
+  async function drawWave(f) {
+    const cv = $('wave'), g = cv.getContext('2d'); g.clearRect(0, 0, cv.width, cv.height);
+    const tok = ++waveTok;
+    if (f.size > 400 * 1048576) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      const ac = new AC();
+      const buf = await ac.decodeAudioData(await f.arrayBuffer());
+      ac.close && ac.close();
+      if (tok !== waveTok) return;
+      const d = buf.getChannelData(0), n = cv.width, step = Math.max(1, Math.floor(d.length / n));
+      const pk = new Float32Array(n); let mx = 1e-6;
+      for (let i = 0; i < n; i++) { let m = 0; for (let j = i * step; j < Math.min(d.length, (i + 1) * step); j += 8) { const v = Math.abs(d[j]); if (v > m) m = v; } pk[i] = m; if (m > mx) mx = m; }
+      g.fillStyle = getComputedStyle(cv).color || '#888';
+      for (let i = 0; i < n; i++) { const h = Math.max(1, pk[i] / mx * 34); g.fillRect(i, 18 - h / 2 + 4, 1, h); }
+    } catch (e) { /* 波形が出せなくても、切り取りはできる */ }
+  }
+  vid.addEventListener('timeupdate', () => { if (dur) $('head').style.left = (vid.currentTime / dur * 100) + '%'; });
+  vid.addEventListener('seeked', () => { if (dur) $('head').style.left = (vid.currentTime / dur * 100) + '%'; });
 
   // ---- 音楽 ----
   function setAudio(f) {
@@ -70,7 +93,7 @@
   $('back1').addEventListener('click', () => { vid.currentTime = Math.max(0, vid.currentTime - 1); });
   $('fwd1').addEventListener('click', () => { vid.currentTime = Math.min(dur, vid.currentTime + 1); });
   $('playSel').addEventListener('click', () => {
-    vid.muted = false; vid.currentTime = S; vid.play().catch(() => {});
+    vid.muted = false; vid.volume = 1; vid.currentTime = S; vid.play().catch(() => {});
     const stop = () => { if (vid.currentTime >= E) { vid.pause(); vid.removeEventListener('timeupdate', stop); } };
     vid.addEventListener('timeupdate', stop);
   });
