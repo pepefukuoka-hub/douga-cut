@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const VER = 3;
+  const VER = 4;
   const $ = (id) => document.getElementById(id);
   const vid = $('vid');
   let file = null, audio = null, url = null, dur = 0, S = 0, E = 0, ff = null, busy = false, outUrl = null;
@@ -61,20 +61,65 @@
       for (let i = 0; i < n; i++) { const h = Math.max(1, pk[i] / mx * 34); g.fillRect(i, 18 - h / 2 + 4, 1, h); }
     } catch (e) { /* 波形が出せなくても、切り取りはできる */ }
   }
-  // 音が始まる所と、終わる所を探して、開始と終了に入れる
-  $('auto').addEventListener('click', () => {
-    const msg = $('autoMsg');
-    if (!wavePk) { msg.textContent = '音の波形が読み取れていないので、自動では合わせられません。手で合わせてください。'; return; }
-    const th = waveMx * 0.06, n = wavePk.length;
-    let a = -1, b = -1;
+  // 画面の動きを調べて、動画が始まった所と終わった所を探す
+  async function scanMotion(onProg) {
+    const v = document.createElement('video');
+    v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = url;
+    await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = () => rej(new Error('video')); setTimeout(res, 8000); });
+    const cv = document.createElement('canvas'); cv.width = 64; cv.height = 36;
+    const g = cv.getContext('2d', { willReadFrequently: true });
+    const step = Math.max(0.25, dur / 480), n = Math.floor(dur / step);
+    let prev = null; const diff = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      await new Promise((res) => { const t = setTimeout(res, 2500); v.onseeked = () => { clearTimeout(t); res(); }; v.currentTime = Math.min(dur - 0.05, i * step); });
+      g.drawImage(v, 0, 0, 64, 36);
+      const px = g.getImageData(0, 0, 64, 36).data, cur = new Uint8Array(64 * 36);
+      for (let k = 0; k < cur.length; k++) cur[k] = (px[k * 4] + px[k * 4 + 1] + px[k * 4 + 2]) / 3;
+      if (prev) { let s = 0; for (let k = 0; k < cur.length; k++) s += Math.abs(cur[k] - prev[k]); diff[i] = s / cur.length; }
+      prev = cur;
+      if (i % 8 === 0) onProg(i / n);
+    }
+    v.removeAttribute('src'); v.load();
+    return { diff, step };
+  }
+  // 動きが続いている区間のうち、最初の始まりと、最後の終わりを返す
+  function motionRange({ diff, step }) {
+    const n = diff.length, sorted = Float32Array.from(diff).sort(), p90 = sorted[Math.floor(n * 0.9)] || 0;
+    const th = Math.max(1.2, p90 * 0.25);
+    const act = Array.from(diff, (d) => d > th);
+    const need = Math.max(2, Math.min(Math.round(3 / step), Math.round(n * 0.3)));   // 約3秒以上続く動き
+    const runs = []; let i = 0;
+    while (i < n) {
+      if (!act[i]) { i++; continue; }
+      let s = i, last = i, gap = 0;
+      for (let j = i; j < n; j++) { if (act[j]) { last = j; gap = 0; } else if (++gap > Math.max(1, Math.round(0.5 / step))) break; }
+      if (last - s + 1 >= need) runs.push([s, last + 1]);
+      i = last + 1;
+    }
+    if (!runs.length) return null;
+    return [runs[0][0] * step, Math.min(dur, runs[runs.length - 1][1] * step + step)];
+  }
+  function audioRange() {
+    if (!wavePk) return null;
+    const th = waveMx * 0.06, n = wavePk.length; let a = -1, b = -1;
     for (let i = 0; i < n; i++) if (wavePk[i] > th) { a = i; break; }
     for (let i = n - 1; i >= 0; i--) if (wavePk[i] > th) { b = i + 1; break; }
-    if (a < 0 || b <= a) { msg.textContent = '音のある所が見つかりませんでした。手で合わせてください。'; return; }
-    const pad = 0.2;
-    S = Math.max(0, a / n * dur - pad); E = Math.min(dur, b / n * dur + pad);
-    if (E - S < MIN) { S = 0; E = dur; }
-    syncUi(); vid.currentTime = S;
-    msg.textContent = '音のある所に合わせました(' + fmt(S) + ' 〜 ' + fmt(E) + ')。前後の余白は、つまみで直せます。';
+    return (a < 0 || b <= a) ? null : [a / n * dur, b / n * dur];
+  }
+  $('auto').addEventListener('click', async () => {
+    const msg = $('autoMsg'), btn = $('auto'); btn.disabled = true;
+    try {
+      let m = null;
+      try { m = motionRange(await scanMotion((p) => { msg.textContent = '画面の動きを調べています… ' + Math.round(p * 100) + '%'; })); } catch (e) { m = null; }
+      const au = audioRange();
+      if (!m && !au) { msg.textContent = '動きも音も見つかりませんでした。手で合わせてください。'; return; }
+      const a = [m, au].filter(Boolean);
+      const pad = 0.2;
+      S = Math.max(0, Math.min(...a.map((r) => r[0])) - pad); E = Math.min(dur, Math.max(...a.map((r) => r[1])) + pad);
+      if (E - S < MIN) { S = 0; E = dur; }
+      syncUi(); vid.currentTime = S;
+      msg.textContent = '合わせました(' + fmt(S) + ' 〜 ' + fmt(E) + ')。使った手がかり: ' + [m && '画面の動き', au && '音'].filter(Boolean).join('と') + '。前後は、つまみで直せます。';
+    } finally { btn.disabled = false; }
   });
   vid.addEventListener('timeupdate', () => { if (dur) $('head').style.left = (vid.currentTime / dur * 100) + '%'; });
   vid.addEventListener('seeked', () => { if (dur) $('head').style.left = (vid.currentTime / dur * 100) + '%'; });
