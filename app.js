@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const VER = 2;
+  const VER = 3;
   const $ = (id) => document.getElementById(id);
   const vid = $('vid');
   let file = null, audio = null, url = null, dur = 0, S = 0, E = 0, ff = null, busy = false, outUrl = null;
@@ -42,10 +42,10 @@
   window.addEventListener('drop', (e) => e.preventDefault());
 
   // ---- 音の波形(音が聞こえなくても、切る場所が分かるように) ----
-  let waveTok = 0;
+  let waveTok = 0, wavePk = null, waveMx = 1;
   async function drawWave(f) {
     const cv = $('wave'), g = cv.getContext('2d'); g.clearRect(0, 0, cv.width, cv.height);
-    const tok = ++waveTok;
+    const tok = ++waveTok; wavePk = null; $('autoMsg').textContent = '';
     if (f.size > 400 * 1048576) return;
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
@@ -56,10 +56,26 @@
       const d = buf.getChannelData(0), n = cv.width, step = Math.max(1, Math.floor(d.length / n));
       const pk = new Float32Array(n); let mx = 1e-6;
       for (let i = 0; i < n; i++) { let m = 0; for (let j = i * step; j < Math.min(d.length, (i + 1) * step); j += 8) { const v = Math.abs(d[j]); if (v > m) m = v; } pk[i] = m; if (m > mx) mx = m; }
+      wavePk = pk; waveMx = mx;
       g.fillStyle = getComputedStyle(cv).color || '#888';
       for (let i = 0; i < n; i++) { const h = Math.max(1, pk[i] / mx * 34); g.fillRect(i, 18 - h / 2 + 4, 1, h); }
     } catch (e) { /* 波形が出せなくても、切り取りはできる */ }
   }
+  // 音が始まる所と、終わる所を探して、開始と終了に入れる
+  $('auto').addEventListener('click', () => {
+    const msg = $('autoMsg');
+    if (!wavePk) { msg.textContent = '音の波形が読み取れていないので、自動では合わせられません。手で合わせてください。'; return; }
+    const th = waveMx * 0.06, n = wavePk.length;
+    let a = -1, b = -1;
+    for (let i = 0; i < n; i++) if (wavePk[i] > th) { a = i; break; }
+    for (let i = n - 1; i >= 0; i--) if (wavePk[i] > th) { b = i + 1; break; }
+    if (a < 0 || b <= a) { msg.textContent = '音のある所が見つかりませんでした。手で合わせてください。'; return; }
+    const pad = 0.2;
+    S = Math.max(0, a / n * dur - pad); E = Math.min(dur, b / n * dur + pad);
+    if (E - S < MIN) { S = 0; E = dur; }
+    syncUi(); vid.currentTime = S;
+    msg.textContent = '音のある所に合わせました(' + fmt(S) + ' 〜 ' + fmt(E) + ')。前後の余白は、つまみで直せます。';
+  });
   vid.addEventListener('timeupdate', () => { if (dur) $('head').style.left = (vid.currentTime / dur * 100) + '%'; });
   vid.addEventListener('seeked', () => { if (dur) $('head').style.left = (vid.currentTime / dur * 100) + '%'; });
 
